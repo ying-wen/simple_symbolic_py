@@ -94,7 +94,7 @@ class Block(object):
         return Pow(self, self._check_other(other))
 
     def __rpow__(self, other):
-        return Pow(self.check_other(other), self)
+        return Pow(self._check_other(other), self)
 
     def __div__(self, other):
         return Div(self, self._check_other(other))
@@ -420,11 +420,13 @@ class Pow(Block):
             and isinstance(self.arg2, (Constant, Var, Pow)):
             return '%s ** %s' % (str(self.arg1), str(self.arg2))
         else:
+            if not isinstance(self.arg1, (Constant, Var, Pow)) \
+                and not isinstance(self.arg2, (Constant, Var, Pow)):
+                return '(%s) ** (%s)' % (str(self.arg1), str(self.arg2))
             if not isinstance(self.arg1, (Constant, Var, Pow)):
                 return '(%s) ** %s' % (str(self.arg1), str(self.arg2))
             if not isinstance(self.arg2, (Constant, Var, Pow)):
                 return '%s ** (%s)' % (str(self.arg1), str(self.arg2))
-            return '(%s) ** (%s)' % (str(self.arg1), str(self.arg2))
 
 
 class Neg(Block):
