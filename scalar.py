@@ -78,6 +78,10 @@ class Block(object):
     def backward(self, gradient=1):
         pass
 
+    @abstractmethod
+    def update(self, learning_rate=1):
+        pass
+
     def _check_other(self, other):
         if isValid(other):
             if isNumber(other):
@@ -124,11 +128,20 @@ class Block(object):
 class ParamBlock(Block):
 
     def __init__(self):
-        Block.__init__(self)
-
+        Block.__init__(self, clip = 10)
+        self.clip = clip
         # caches output after call of forward
-
         self.param = None
+        self.gradParam = 0
+
+    def update(self, learning_rate):
+        if self.gradParam < self.clip:
+            self.param += self.gradParam
+        else:
+            self.param += self.clip
+        self.reset_gradient()
+
+    def reset_gradient(self):
         self.gradParam = 0
 
     def set(self, value):
@@ -158,16 +171,20 @@ class Constant(Block):
     def deriv(self, var_name):
         return self
 
+    def update(self, learning_rate):
+        pass
+
     def __str__(self):
         return self._name
 
 
 class Var(ParamBlock):
 
-    def __init__(self, name):
-        ParamBlock.__init__(self)
+    def __init__(self, name, clip=10):
+        ParamBlock.__init__(self, clip)
         self._name = name
         self.var_table[name] = self
+
 
     @property
     def name(self):
@@ -186,7 +203,7 @@ class Var(ParamBlock):
         else:
             return Constant(self.forward())
 
-    def backward(self, gradient=1):
+    def backward(self, gradient=1, clip=10):
         self.gradParam += gradient
 
     def deriv(self, var_name):
@@ -218,6 +235,10 @@ class Add(Block):
     def backward(self, gradient=1):
         self.arg1.backward(gradient)
         self.arg2.backward(gradient)
+
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
 
     def deriv(self, var_name, gradient=1):
         if self.arg1.var_table.get(var_name) != None \
@@ -254,6 +275,10 @@ class Mul(Block):
     def backward(self, gradient=1):
         self.arg1.backward(gradient * self.arg2.output)
         self.arg2.backward(gradient * self.arg1.output)
+
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
 
     def deriv(self, var_name):
         deriv1 = self.arg1.forward_partial(var_name) \
@@ -302,6 +327,10 @@ class Sub(Block):
         self.arg1.backward(gradient)
         self.arg2.backward(gradient * -1)
 
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
+
     def deriv(self, var_name, gradient=1):
         if self.arg1.var_table.get(var_name) != None \
             and self.arg2.var_table.get(var_name) != None:
@@ -341,6 +370,10 @@ class Div(Block):
         self.arg1.backward(gradient * (1.0 / self.arg2.output))
         self.arg2.backward(gradient * (self.output / self.arg2.output)
                            * -1)
+
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
 
     def deriv(self, var_name):
         dervi1 = self.arg1.forward_partial(var_name) \
@@ -415,6 +448,10 @@ class Pow(Block):
         self.arg2.backward(gradient * math.log(self.arg1.output)
                            * self.output)
 
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
+
     def __str__(self):
         if isinstance(self.arg1, (Constant, Var, Pow)) \
             and isinstance(self.arg2, (Constant, Var, Pow)):
@@ -446,6 +483,10 @@ class Neg(Block):
     def backward(self, gradient=1):
         self.arg.backward(gradient * -1)
 
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
+
     def deriv(self, var_name):
         if self.arg.var_table.get(var_name) == None:
             return Constant(self.forward_partial(var_name))
@@ -475,6 +516,10 @@ class Log(Block):
 
     def backward(self, gradient=1):
         self.arg.backward(gradient * (1 / self.arg.output))
+
+    def update(self, learning_rate):
+        self.arg1.update(learning_rate)
+        self.arg2.update(learning_rate)
 
     def deriv(self, var_name):
         if arg.var_table.get(var_name) == None:
